@@ -110,13 +110,13 @@ mod tests {
     use super::SigV4;
     use request::Header;
 
-#[test]
+    #[test]
     fn test_new_sigv4() {
         let sig = SigV4::new();
         assert_eq!(sig.headers.len(), 0)
     }
 
-#[test]
+    #[test]
     fn test_add_header() {
         let h = Header{ key: "test".to_string(),
         value: "a string".to_string()};
@@ -125,13 +125,13 @@ mod tests {
         assert_eq!(sig.headers[0].value.as_slice(), "a string")
     }
 
-#[test]
+    #[test]
     fn test_signature() {
         let sig = SigV4::new().method("GET".to_string()).path("/".to_string());
         assert_eq!(sig.signature().as_slice(), "GET")
     }
 
-#[test]
+    #[test]
     fn test_signed_headers() {
         let h = Header{ key: "test".to_string(),
         value: "a string".to_string()};
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(sig.signed_headers().as_slice(), "content-type;test;x-amz-date")
     }
 
-#[test]
+    #[test]
     fn test_hashed_payload() {
         let sig = SigV4::new().
             payload("Action=ListUsers&Version=2010-05-08".to_string());
@@ -154,7 +154,7 @@ mod tests {
         "b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
     }
 
-#[test]
+    #[test]
     fn test_empty_payload() {
         let sig = SigV4::new();
         assert_eq!(sig.hashed_payload(),
