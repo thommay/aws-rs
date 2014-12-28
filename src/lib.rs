@@ -5,7 +5,4 @@ extern crate curl;
 #[cfg(unix)] extern crate openssl;
 extern crate serialize;
 
-pub mod glacier;
-
-#[cfg (test)]
-mod test;
+pub mod signers;
