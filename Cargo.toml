@@ -1,0 +1,9 @@
+[package]
+
+name = "glacier"
+version = "0.0.1"
+authors = ["Thom May <thom@may.lt>"]
+
+[dependencies]
+openssl = "*"
+curl = "*"
