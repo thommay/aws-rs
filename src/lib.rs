@@ -6,3 +6,4 @@ extern crate curl;
 extern crate serialize;
 
 pub mod signers;
+pub mod request;

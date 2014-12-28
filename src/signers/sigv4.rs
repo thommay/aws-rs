@@ -2,11 +2,7 @@ use std::ascii::AsciiExt;
 use openssl::crypto::hash::Hasher;
 use openssl::crypto::hash::HashType::SHA256;
 use serialize::hex::ToHex;
-
-pub struct Header {
-    pub key: String,
-    pub value: String,
-}
+use request::Header;
 
 pub struct SigV4 {
     headers: Vec<Header>,
@@ -93,7 +89,8 @@ impl SigV4 {
 
 #[cfg(test)]
 mod tests {
-    use super::{SigV4, Header};
+    use super::SigV4;
+    use request::Header;
 
 #[test]
     fn test_new_sigv4() {
