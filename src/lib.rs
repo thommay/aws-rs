@@ -1,6 +1,4 @@
-#![crate_name = "glacier"]
-// #![desc = "A library to interact with AWS"]
-// #![license = "MIT"]
+#![crate_name = "aws"]
 #![crate_type = "lib"]
 
 extern crate curl;

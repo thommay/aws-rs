@@ -1,6 +1,6 @@
 [package]
 
-name = "glacier"
+name = "aws"
 version = "0.0.1"
 authors = ["Thom May <thom@may.lt>"]
 
