@@ -63,23 +63,45 @@ impl SigV4 {
     }
 
     fn signed_headers(mut self) -> String {
-        let mut signed = String::new();
-        self.sorted_headers();
+        self.sort_headers();
+        let mut h = String::new();
 
         for header in self.headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
             }
-            signed.push_str(key.as_slice());
-            signed.push(';')
+            h.push_str(key.as_slice());
+            h.push(';')
         }
-        signed.trim_right_chars(';').to_string()
+        h.trim_right_chars(';').to_string()
     }
 
-    fn sorted_headers(&mut self) {
+    fn canonical_headers(mut self) -> String {
+        self.sort_headers();
+        let mut h = String::new();
+
+        for header in self.headers.iter() {
+            let key = header.key.to_ascii_lower();
+            if key == "authorization" {
+                continue;
+            }
+            h.push_str(format!("{}:{}\n", key, canonical_value(&header.value)).as_slice());
+        }
+        h
+    }
+
+    fn sort_headers(&mut self) {
         self.headers.sort_by(|a,b|
                         a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()))
+    }
+}
+
+fn canonical_value(val: &String) -> String {
+    if val.starts_with("\""){
+        val.to_string()
+    } else {
+        val.replace("  ", " ").trim().to_string()
     }
 }
 
@@ -137,5 +159,29 @@ mod tests {
         let sig = SigV4::new();
         assert_eq!(sig.hashed_payload(),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    }
+
+    #[test]
+    fn test_canonical_headers() {
+        let h = Header{ key: "Xyz".to_string(), value: "1".to_string() };
+        let h2 = Header{ key: "Abc".to_string(), value: "2".to_string() };
+        let h3 = Header{ key: "Mno".to_string(), value: "3".to_string() };
+        let h4 = Header{ key: "Authorization".to_string(), value: "4".to_string() };
+        let sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
+        assert_eq!(sig.canonical_headers().as_slice(), "abc:2\nmno:3\nxyz:1\n")
+    }
+
+    #[test]
+    fn test_prune_whitespace() {
+        let h = Header{ key: "Abc".to_string(), value: "a  b  c".to_string() };
+        let sig = SigV4::new().header(h);
+        assert_eq!(sig.canonical_headers().as_slice(), "abc:a b c\n")
+    }
+
+    #[test]
+    fn test_no_prune_quoted() {
+        let h = Header{ key: "Abc".to_string(), value: "\"a  b  c\"".to_string() };
+        let sig = SigV4::new().header(h);
+        assert_eq!(sig.canonical_headers().as_slice(), "abc:\"a  b  c\"\n")
     }
 }
