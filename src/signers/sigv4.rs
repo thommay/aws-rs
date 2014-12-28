@@ -1,3 +1,4 @@
+use time::now_utc;
 use std::ascii::AsciiExt;
 use openssl::crypto::hash::Hasher;
 use openssl::crypto::hash::HashType::SHA256;
@@ -10,16 +11,19 @@ pub struct SigV4 {
     method: Option<String>,
     query: Option<String>,
     payload: Option<String>,
+    date: String,
 }
 
 impl SigV4 {
     pub fn new() -> SigV4{
+        let dt = now_utc();
         SigV4 {
             headers: Vec::new(),
             path: None,
             method: None,
             query: None,
             payload: None,
+            date: dt.rfc3339().to_string(),
         }
     }
 
@@ -183,5 +187,11 @@ mod tests {
         let h = Header{ key: "Abc".to_string(), value: "\"a  b  c\"".to_string() };
         let sig = SigV4::new().header(h);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:\"a  b  c\"\n")
+    }
+
+    #[test]
+    fn test_should_be_3339() {
+        let sig = SigV4::new();
+        assert!(sig.date.ends_with("Z"))
     }
 }
