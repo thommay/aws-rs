@@ -23,10 +23,6 @@ impl SigV4 {
         }
     }
 
-    pub fn headers(self) -> Vec<Header> {
-        self.headers
-    }
-
     pub fn header(mut self, header: Header) -> SigV4 {
         self.headers.push(header);
         self
@@ -56,7 +52,7 @@ impl SigV4 {
         self.method.unwrap()
     }
 
-    pub fn hashed_payload(self) -> String {
+    fn hashed_payload(self) -> String {
         let val = match self.payload {
             Some(x) => x,
             None => "".to_string(),
@@ -66,11 +62,11 @@ impl SigV4 {
         h.finalize().as_slice().to_hex().to_string()
     }
 
-    pub fn signed_headers(mut self) -> String {
+    fn signed_headers(mut self) -> String {
         let mut signed = String::new();
         self.sorted_headers();
 
-        for header in self.headers().iter() {
+        for header in self.headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
@@ -95,7 +91,7 @@ mod tests {
 #[test]
     fn test_new_sigv4() {
         let sig = SigV4::new();
-        assert_eq!(sig.headers().len(), 0)
+        assert_eq!(sig.headers.len(), 0)
     }
 
 #[test]
@@ -104,7 +100,7 @@ mod tests {
         value: "a string".to_string()};
 
         let sig = SigV4::new().header(h);
-        assert_eq!(sig.headers()[0].value.as_slice(), "a string")
+        assert_eq!(sig.headers[0].value.as_slice(), "a string")
     }
 
 #[test]
