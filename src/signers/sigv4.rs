@@ -16,19 +16,24 @@ pub struct SigV4 {
 
 impl SigV4 {
     pub fn new() -> SigV4{
-        let dt = now_utc();
+        let dt = now_utc().rfc3339().to_string();
         SigV4 {
             headers: Vec::new(),
             path: None,
             method: None,
             query: None,
             payload: None,
-            date: dt.rfc3339().to_string(),
+            date: dt,
         }
     }
 
     pub fn header(mut self, header: Header) -> SigV4 {
         self.headers.push(header);
+        self
+    }
+
+    pub fn date(mut self) -> SigV4 {
+        self.headers.push((Header{ key: "X-Amz-Date".to_string(), value: self.date.to_string()}));
         self
     }
 
@@ -66,11 +71,11 @@ impl SigV4 {
         h.finalize().as_slice().to_hex().to_string()
     }
 
-    fn signed_headers(mut self) -> String {
-        self.sort_headers();
+    fn signed_headers(self) -> String {
+        let headers = sort_headers(self.headers);
         let mut h = String::new();
 
-        for header in self.headers.iter() {
+        for header in headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
@@ -81,11 +86,11 @@ impl SigV4 {
         h.trim_right_chars(';').to_string()
     }
 
-    fn canonical_headers(mut self) -> String {
-        self.sort_headers();
+    fn canonical_headers(self) -> String {
+        let headers = sort_headers(self.headers);
         let mut h = String::new();
 
-        for header in self.headers.iter() {
+        for header in headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
@@ -95,10 +100,14 @@ impl SigV4 {
         h
     }
 
-    fn sort_headers(&mut self) {
-        self.headers.sort_by(|a,b|
-                        a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()))
-    }
+    // fn canonical_request(mut self) -> String {
+    // }
+
+}
+
+fn sort_headers(mut headers: Vec<Header>) -> Vec<Header>{
+    headers.sort_by(|a,b| a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()));
+    headers
 }
 
 fn canonical_value(val: &String) -> String {
@@ -121,6 +130,12 @@ mod tests {
     }
 
     #[test]
+    fn test_date() {
+        let sig = SigV4::new().date();
+        assert_eq!(sig.headers[0].key.as_slice(), "X-Amz-Date")
+    }
+
+    #[test]
     fn test_add_header() {
         let h = Header{ key: "test".to_string(),
         value: "a string".to_string()};
@@ -138,15 +153,13 @@ mod tests {
     #[test]
     fn test_signed_headers() {
         let h = Header{ key: "test".to_string(),
-        value: "a string".to_string()};
+            value: "a string".to_string()};
         let h2 = Header{ key: "Content-Type".to_string(),
-        value: "application/x-www-form-urlencoded; charset=utf-8".to_string()};
-        let h3 = Header{ key: "X-Amz-Date".to_string(),
-        value: "20120228T030031Z".to_string()};
-        let h4 = Header{ key: "Authorization".to_string(),
-        value: "none".to_string()};
+            value: "application/x-www-form-urlencoded; charset=utf-8".to_string()};
+        let h3 = Header{ key: "Authorization".to_string(),
+            value: "none".to_string()};
 
-        let sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
+        let sig = SigV4::new().date().header(h).header(h2).header(h3);
         assert_eq!(sig.signed_headers().as_slice(), "content-type;test;x-amz-date")
     }
 
