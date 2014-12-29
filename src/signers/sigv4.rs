@@ -58,12 +58,18 @@ impl SigV4 {
     }
 
     pub fn signature(self) -> String {
-        self.method.unwrap()
+        self.hashed_canonical_request()
     }
 
-    fn hashed_payload(self) -> String {
+    fn hashed_canonical_request(self) -> String {
+        let mut h = Hasher::new(SHA256);
+        h.update(self.canonical_request().as_bytes());
+        h.finalize().as_slice().to_hex().to_string()
+    }
+
+    fn hashed_payload(&self) -> String {
         let val = match self.payload {
-            Some(x) => x,
+            Some(ref x) => x.to_string(),
             None => "".to_string(),
         };
         let mut h = Hasher::new(SHA256);
@@ -71,11 +77,11 @@ impl SigV4 {
         h.finalize().as_slice().to_hex().to_string()
     }
 
-    fn signed_headers(self) -> String {
-        let headers = sort_headers(self.headers);
+    fn signed_headers(&mut self) -> String {
+        self.headers.sort_by(|a,b| a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()));
         let mut h = String::new();
 
-        for header in headers.iter() {
+        for header in self.headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
@@ -86,11 +92,11 @@ impl SigV4 {
         h.trim_right_chars(';').to_string()
     }
 
-    fn canonical_headers(self) -> String {
-        let headers = sort_headers(self.headers);
+    fn canonical_headers(&mut self) -> String {
+        self.headers.sort_by(|a,b| a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()));
         let mut h = String::new();
 
-        for header in headers.iter() {
+        for header in self.headers.iter() {
             let key = header.key.to_ascii_lower();
             if key == "authorization" {
                 continue;
@@ -100,14 +106,23 @@ impl SigV4 {
         h
     }
 
-    // fn canonical_request(mut self) -> String {
-    // }
+    fn canonical_request(mut self) -> String {
+        format!("{}\n{}\n{}\n{}\n{}\n{}", expand_string(&self.method),
+                expand_string(&self.path),
+                expand_string(&self.query),
+                self.canonical_headers(),
+                self.signed_headers(),
+                self.hashed_payload()
+        )
+    }
 
 }
 
-fn sort_headers(mut headers: Vec<Header>) -> Vec<Header>{
-    headers.sort_by(|a,b| a.key.to_ascii_lower().cmp(&b.key.to_ascii_lower()));
-    headers
+fn expand_string(val: &Option<String>) -> String {
+    match *val {
+        None => "".to_string(),
+        Some(ref x) => x.to_string(),
+    }
 }
 
 fn canonical_value(val: &String) -> String {
@@ -145,9 +160,20 @@ mod tests {
     }
 
     #[test]
-    fn test_signature() {
-        let sig = SigV4::new().method("GET".to_string()).path("/".to_string());
-        assert_eq!(sig.signature().as_slice(), "GET")
+    fn test_hashed_request() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let sig = SigV4 {
+            headers: vec![h, h2],
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: "20110909T233600Z".to_string(),
+        }.date();
+
+        assert_eq!(sig.hashed_canonical_request().as_slice(), "3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
     }
 
     #[test]
@@ -159,7 +185,7 @@ mod tests {
         let h3 = Header{ key: "Authorization".to_string(),
             value: "none".to_string()};
 
-        let sig = SigV4::new().date().header(h).header(h2).header(h3);
+        let mut sig = SigV4::new().date().header(h).header(h2).header(h3);
         assert_eq!(sig.signed_headers().as_slice(), "content-type;test;x-amz-date")
     }
 
@@ -184,21 +210,21 @@ mod tests {
         let h2 = Header{ key: "Abc".to_string(), value: "2".to_string() };
         let h3 = Header{ key: "Mno".to_string(), value: "3".to_string() };
         let h4 = Header{ key: "Authorization".to_string(), value: "4".to_string() };
-        let sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
+        let mut sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:2\nmno:3\nxyz:1\n")
     }
 
     #[test]
     fn test_prune_whitespace() {
         let h = Header{ key: "Abc".to_string(), value: "a  b  c".to_string() };
-        let sig = SigV4::new().header(h);
+        let mut sig = SigV4::new().header(h);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:a b c\n")
     }
 
     #[test]
     fn test_no_prune_quoted() {
         let h = Header{ key: "Abc".to_string(), value: "\"a  b  c\"".to_string() };
-        let sig = SigV4::new().header(h);
+        let mut sig = SigV4::new().header(h);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:\"a  b  c\"\n")
     }
 
@@ -207,4 +233,49 @@ mod tests {
         let sig = SigV4::new();
         assert!(sig.date.ends_with("Z"))
     }
+
+    #[test]
+    fn test_specific_date() {
+        let sig = SigV4 {
+            headers: Vec::new(),
+            path: None,
+            method: None,
+            query: None,
+            payload: None,
+            date: "20120102T101112Z".to_string(),
+        }.date();
+        assert_eq!(sig.headers[0].value.as_slice(), "20120102T101112Z")
+    }
+
+    #[test]
+    fn test_empty_canonical_request() {
+        let sig = SigV4::new();
+        assert_eq!(sig.canonical_request().as_slice(), "\n\n\n\n\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    }
+
+    #[test]
+    fn test_canonical_request() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let sig = SigV4 {
+            headers: vec![h, h2],
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: "20110909T233600Z".to_string(),
+        }.date();
+
+        assert_eq!(sig.canonical_request().as_slice(), r"POST
+/
+
+content-type:application/x-www-form-urlencoded; charset=utf-8
+host:iam.amazonaws.com
+x-amz-date:20110909T233600Z
+
+content-type;host;x-amz-date
+b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
+    }
+
 }
