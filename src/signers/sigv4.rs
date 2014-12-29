@@ -1,4 +1,5 @@
 use time::now_utc;
+use time::Tm;
 use std::ascii::AsciiExt;
 use openssl::crypto::hash::Hasher;
 use openssl::crypto::hash::HashType::SHA256;
@@ -11,12 +12,12 @@ pub struct SigV4 {
     method: Option<String>,
     query: Option<String>,
     payload: Option<String>,
-    date: String,
+    date: Tm,
 }
 
 impl SigV4 {
     pub fn new() -> SigV4{
-        let dt = now_utc().rfc3339().to_string();
+        let dt = now_utc();
         SigV4 {
             headers: Vec::new(),
             path: None,
@@ -33,7 +34,7 @@ impl SigV4 {
     }
 
     pub fn date(mut self) -> SigV4 {
-        self.headers.push((Header{ key: "X-Amz-Date".to_string(), value: self.date.to_string()}));
+        self.headers.push((Header{ key: "X-Amz-Date".to_string(), value: self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string()}));
         self
     }
 
@@ -137,6 +138,7 @@ fn canonical_value(val: &String) -> String {
 mod tests {
     use super::SigV4;
     use request::Header;
+    use time::strptime;
 
     #[test]
     fn test_new_sigv4() {
@@ -170,7 +172,7 @@ mod tests {
             method: Some("POST".to_string()),
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
-            date: "20110909T233600Z".to_string(),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
         }.date();
 
         assert_eq!(sig.hashed_canonical_request().as_slice(), "3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
@@ -229,12 +231,6 @@ mod tests {
     }
 
     #[test]
-    fn test_should_be_3339() {
-        let sig = SigV4::new();
-        assert!(sig.date.ends_with("Z"))
-    }
-
-    #[test]
     fn test_specific_date() {
         let sig = SigV4 {
             headers: Vec::new(),
@@ -242,9 +238,9 @@ mod tests {
             method: None,
             query: None,
             payload: None,
-            date: "20120102T101112Z".to_string(),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
         }.date();
-        assert_eq!(sig.headers[0].value.as_slice(), "20120102T101112Z")
+        assert_eq!(sig.headers[0].value.as_slice(), "20110909T233600Z")
     }
 
     #[test]
@@ -264,7 +260,7 @@ mod tests {
             method: Some("POST".to_string()),
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
-            date: "20110909T233600Z".to_string(),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
         }.date();
 
         assert_eq!(sig.canonical_request().as_slice(), r"POST
