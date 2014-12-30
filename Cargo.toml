@@ -8,6 +8,7 @@ authors = ["Thom May <thom@may.lt>"]
 openssl = "*"
 curl = "*"
 time = "*"
+url = "0.2.9"
 
 [dev-dependencies]
 log = "0.1"
