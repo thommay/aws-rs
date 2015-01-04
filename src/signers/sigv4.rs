@@ -7,6 +7,12 @@ use serialize::hex::ToHex;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use request::Header;
+use url::percent_encoding::{percent_encode_to, FORM_URLENCODED_ENCODE_SET};
+
+struct QP<'a> {
+    k: &'a str,
+    v: &'a str,
+}
 
 #[deriving(Clone)]
 pub struct SigV4 {
@@ -107,16 +113,61 @@ impl SigV4 {
         h
     }
 
+    fn canonical_query_string(&self) -> String {
+        match self.query {
+            None => String::new(),
+            Some(ref x) => {
+                let mut h: Vec<QP> = Vec::new();
+                for q in x.split('&') {
+                    if q.contains_char('=') {
+                        let n: Vec<&str> = q.splitn(1, '=').collect();
+                        h.push(QP{k: n[0], v: n[1]})
+                    } else {
+                        h.push(QP{k: q, v: ""})
+                    }
+                };
+                sort_query_string(h)
+            }
+        }
+    }
+
     fn canonical_request(&self) -> String {
         format!("{}\n{}\n{}\n{}\n{}\n{}", expand_string(&self.method),
                 expand_string(&self.path),
-                expand_string(&self.query),
+                self.canonical_query_string(),
                 self.canonical_headers(),
                 self.signed_headers(),
                 self.hashed_payload()
         )
     }
 
+}
+
+fn sort_query_string(mut query: Vec<QP>) -> String {
+    #[inline]
+    fn byte_serialize(input: &str, output: &mut String) {
+        for &byte in input.as_bytes().iter() {
+            percent_encode_to(&[byte], FORM_URLENCODED_ENCODE_SET, output)
+        }
+    }
+
+    let mut output = String::new();
+
+    query.sort_by( |a, b| a.k.cmp(b.k));
+    for item in query.iter() {
+        if output.len() > 0 {
+            output.push_str("&");
+        }
+        byte_serialize(item.k, &mut output);
+        output.push_str("=");
+        byte_serialize(item.v, &mut output);
+    }
+
+    output
+    // it would be marvelous to use the below, but the AWS SigV4 spec says space must be %20, and
+    // rust-url gives me back a +. So, roll our own for now.
+    // let qs: Vec<(String, String)> = query.iter().map(|n| (n.k.to_string(), n.v.to_string())).collect();
+    // form_urlencoded::serialize_owned(qs.as_slice())
 }
 
 fn append_header(map: &mut BTreeMap<String, Vec<String>>, key: &str, value: &str) {
@@ -195,6 +246,31 @@ mod tests {
 
         let sig = SigV4::new().header(h).header(h2);
         assert_eq!(sig.headers.get("test"), Some(&vec!("a string".to_string(), "another string".to_string())))
+    }
+
+    #[test]
+    fn test_canonical_query_encoded() {
+        let sig = SigV4::new().query("a space=woo woo&x-amz-header=foo".to_string());
+        assert_eq!(sig.canonical_query_string().as_slice(), "a%20space=woo%20woo&x-amz-header=foo")
+    }
+
+    #[test]
+    fn test_canonical_query_valueless() {
+        let sig = SigV4::new().query("other=&test&x-amz-header=foo".to_string());
+        assert_eq!(sig.canonical_query_string().as_slice(), "other=&test=&x-amz-header=foo")
+    }
+
+    #[test]
+    fn test_canonical_query_sorted() {
+        let sig = SigV4::new().query("foo=&bar=&baz=".to_string());
+        assert_eq!(sig.canonical_query_string().as_slice(), "bar=&baz=&foo=")
+    }
+
+    // Ensure that params with the same name stay in the same order after sorting
+    #[test]
+    fn test_canonical_query_complex() {
+        let sig = SigV4::new().query("q.options=abc&q=xyz&q=mno".to_string());
+        assert_eq!(sig.canonical_query_string().as_slice(), "q=xyz&q=mno&q.options=abc")
     }
 
     #[test]

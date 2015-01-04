@@ -6,6 +6,7 @@ extern crate curl;
 #[cfg(unix)] extern crate openssl;
 extern crate serialize;
 extern crate time;
+extern crate url;
 
 pub mod signers;
 pub mod request;
