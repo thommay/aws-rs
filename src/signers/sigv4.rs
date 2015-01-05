@@ -14,7 +14,7 @@ struct QP<'a> {
     v: &'a str,
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct SigV4 {
     headers: BTreeMap<String, Vec<String>>,
     path: Option<String>,
@@ -98,7 +98,7 @@ impl SigV4 {
             h.push_str(key.as_slice());
             h.push(';')
         }
-        h.trim_right_chars(';').to_string()
+        h.trim_right_matches(';').to_string()
     }
 
     fn canonical_headers(&self) -> String {
@@ -203,7 +203,7 @@ fn canonical_value(val: &Vec<String>) -> String {
             st.push(',')
         }
     }
-    st.trim_right_chars(',').to_string()
+    st.trim_right_matches(',').to_string()
 }
 
 #[cfg(test)]
