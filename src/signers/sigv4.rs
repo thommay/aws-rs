@@ -92,13 +92,15 @@ impl SigV4 {
         let mut h = String::new();
 
         for (key,_) in self.headers.iter() {
+            if h.len() > 0 {
+                h.push(';')
+            }
             if key.as_slice() == "authorization" {
                 continue;
             }
             h.push_str(key.as_slice());
-            h.push(';')
         }
-        h.trim_right_matches(';').to_string()
+        h
     }
 
     fn canonical_headers(&self) -> String {
@@ -195,15 +197,16 @@ fn expand_string(val: &Option<String>) -> String {
 fn canonical_value(val: &Vec<String>) -> String {
     let mut st = String::new();
     for v in val.iter() {
-        if v.starts_with("\""){
-            st.push_str(v.as_slice());
-            st.push(',')
-        } else {
-            st.push_str(v.replace("  ", " ").trim());
+        if st.len() > 0 {
             st.push(',')
         }
+        if v.starts_with("\""){
+            st.push_str(v.as_slice());
+        } else {
+            st.push_str(v.replace("  ", " ").trim());
+        }
     }
-    st.trim_right_matches(',').to_string()
+    st
 }
 
 #[cfg(test)]
