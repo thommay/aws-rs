@@ -73,10 +73,24 @@ impl SigV4 {
     }
 
     pub fn signature(self) -> String {
-        self.hashed_canonical_request()
+        self.signing_string()
     }
 
-    fn hashed_canonical_request(self) -> String {
+    fn signing_string(self) -> String {
+        format!("AWS4-HMAC-SHA256\n{}\n{}\n{}",
+                self.date.strftime("%Y%m%dT%H%M%SZ").unwrap(),
+                self.credential_scope(),
+                self.hashed_canonical_request())
+    }
+
+    fn credential_scope(&self) -> String {
+        format!("{}/{}/{}/aws4_request",
+                self.date.strftime("%Y%m%d").unwrap(),
+                expand_string(&self.region),
+                expand_string(&self.service))
+    }
+
+    fn hashed_canonical_request(&self) -> String {
         let mut h = Hasher::new(SHA256);
         h.update(self.canonical_request().as_bytes());
         h.finalize().as_slice().to_hex().to_string()
@@ -281,6 +295,28 @@ mod tests {
     }
 
     #[test]
+    fn test_signing_string() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let sig = SigV4 {
+            headers: BTreeMap::new(),
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("us-east-1".to_string()),
+            service: Some("iam".to_string()),
+        }.date().header(h).header(h2);
+
+        assert_eq!(sig.signing_string().as_slice(), r"AWS4-HMAC-SHA256
+20110909T233600Z
+20110909/us-east-1/iam/aws4_request
+3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
+    }
+
+    #[test]
     fn test_hashed_request() {
         let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
         let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
@@ -364,6 +400,21 @@ mod tests {
             service: None,
         }.date();
         assert_eq!(sig.headers.get("x-amz-date"), wrap_header!("20110909T233600Z"))
+    }
+
+    #[test]
+    fn test_credential_scope() {
+        let sig = SigV4 {
+            headers: BTreeMap::new(),
+            path: None,
+            method: None,
+            query: None,
+            payload: None,
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("eu-west-1".to_string()),
+            service: Some("iam".to_string()),
+        };
+        assert_eq!(sig.credential_scope().as_slice(), "20110909/eu-west-1/iam/aws4_request")
     }
 
     #[test]
