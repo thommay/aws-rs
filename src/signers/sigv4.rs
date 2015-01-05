@@ -193,11 +193,11 @@ fn sort_query_string(mut query: Vec<QP>) -> String {
 fn append_header(map: &mut BTreeMap<String, Vec<String>>, key: &str, value: &str) {
     let k = key.to_ascii_lowercase().to_string();
 
-    match map.entry(k) {
+    match map.entry(k.as_slice()) {
         Entry::Vacant(entry) => {
             let mut values = Vec::new();
             values.push(value.to_string());
-            entry.set(values);
+            entry.insert(values);
         },
         Entry::Occupied(entry) => {
             entry.into_mut().push(value.to_string());
