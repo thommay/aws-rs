@@ -16,24 +16,28 @@ struct QP<'a> {
 
 #[derive(Clone)]
 pub struct SigV4 {
-    headers: BTreeMap<String, Vec<String>>,
-    path: Option<String>,
-    method: Option<String>,
-    query: Option<String>,
-    payload: Option<String>,
     date: Tm,
+    headers: BTreeMap<String, Vec<String>>,
+    method: Option<String>,
+    path: Option<String>,
+    payload: Option<String>,
+    query: Option<String>,
+    region: Option<String>,
+    service: Option<String>,
 }
 
 impl SigV4 {
     pub fn new() -> SigV4{
         let dt = now_utc();
         SigV4 {
-            headers: BTreeMap::new(),
-            path: None,
-            method: None,
-            query: None,
-            payload: None,
             date: dt,
+            headers: BTreeMap::new(),
+            method: None,
+            path: None,
+            payload: None,
+            query: None,
+            region: None,
+            service: None,
         }
     }
 
@@ -288,6 +292,8 @@ mod tests {
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: None,
+            service: None,
         }.date().header(h).header(h2);
 
         assert_eq!(sig.hashed_canonical_request().as_slice(), "3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
@@ -354,6 +360,8 @@ mod tests {
             query: None,
             payload: None,
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: None,
+            service: None,
         }.date();
         assert_eq!(sig.headers.get("x-amz-date"), wrap_header!("20110909T233600Z"))
     }
@@ -376,6 +384,8 @@ mod tests {
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: None,
+            service: None,
         }.date().header(h).header(h2);
 
         assert_eq!(sig.canonical_request().as_slice(), r"POST
