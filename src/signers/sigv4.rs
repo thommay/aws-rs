@@ -6,8 +6,10 @@ use openssl::crypto::hash::HashType::SHA256;
 use serialize::hex::ToHex;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use request::Header;
 use url::percent_encoding::{percent_encode_to, FORM_URLENCODED_ENCODE_SET};
+
+use request::Header;
+use credentials::Credentials;
 
 struct QP<'a> {
     k: &'a str,
@@ -15,7 +17,8 @@ struct QP<'a> {
 }
 
 #[derive(Clone)]
-pub struct SigV4 {
+pub struct SigV4<'a> {
+    credentials: Option<Credentials<'a>>,
     date: Tm,
     headers: BTreeMap<String, Vec<String>>,
     method: Option<String>,
@@ -26,10 +29,11 @@ pub struct SigV4 {
     service: Option<String>,
 }
 
-impl SigV4 {
-    pub fn new() -> SigV4{
+impl<'a> SigV4<'a> {
+    pub fn new() -> SigV4<'a>{
         let dt = now_utc();
         SigV4 {
+            credentials: None,
             date: dt,
             headers: BTreeMap::new(),
             method: None,
@@ -41,33 +45,38 @@ impl SigV4 {
         }
     }
 
-    pub fn header(mut self, header: Header) -> SigV4 {
+    pub fn header(mut self, header: Header) -> SigV4<'a> {
         append_header(&mut self.headers, header.key.as_slice(), header.value.as_slice());
         self
     }
 
-    pub fn date(mut self) -> SigV4 {
+    pub fn credentials(mut self, credentials: Credentials<'a>) -> SigV4<'a> {
+        self.credentials = Some(credentials);
+        self
+    }
+
+    pub fn date(mut self) -> SigV4<'a> {
         append_header(&mut self.headers, "X-Amz-Date",
                       self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
         self
     }
 
-    pub fn path(mut self, path: String) -> SigV4 {
+    pub fn path(mut self, path: String) -> SigV4<'a> {
         self.path = Some(path);
         self
     }
 
-    pub fn method(mut self, method: String) -> SigV4 {
+    pub fn method(mut self, method: String) -> SigV4<'a> {
         self.method = Some(method);
         self
     }
 
-    pub fn query(mut self, query: String) -> SigV4 {
+    pub fn query(mut self, query: String) -> SigV4<'a> {
         self.query = Some(query);
         self
     }
 
-    pub fn payload(mut self, payload: String) -> SigV4 {
+    pub fn payload(mut self, payload: String) -> SigV4<'a> {
         self.payload = Some(payload);
         self
     }
@@ -231,6 +240,7 @@ fn canonical_value(val: &Vec<String>) -> String {
 mod tests {
     use super::SigV4;
     use request::Header;
+    use credentials::Credentials;
     use time::strptime;
     use std::collections::BTreeMap;
 
@@ -250,6 +260,15 @@ mod tests {
     fn test_date() {
         let sig = SigV4::new().date();
         assert!(sig.headers.contains_key("x-amz-date"))
+    }
+
+    #[test]
+    fn test_add_credentials() {
+        let cred = Credentials::new().path("fixtures/credentials.ini").load();
+        let sig = SigV4::new().credentials(cred);
+
+        let c = sig.credentials.unwrap();
+        assert_eq!(c.key.unwrap().as_slice(), "12345")
     }
 
     #[test]
@@ -300,6 +319,7 @@ mod tests {
         let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
 
         let sig = SigV4 {
+            credentials: None,
             headers: BTreeMap::new(),
             path: Some("/".to_string()),
             method: Some("POST".to_string()),
@@ -327,6 +347,7 @@ mod tests {
             method: Some("POST".to_string()),
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            credentials: None,
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
             region: None,
             service: None,
@@ -395,6 +416,7 @@ mod tests {
             method: None,
             query: None,
             payload: None,
+            credentials: None,
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
             region: None,
             service: None,
@@ -410,6 +432,7 @@ mod tests {
             method: None,
             query: None,
             payload: None,
+            credentials: None,
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
             region: Some("eu-west-1".to_string()),
             service: Some("iam".to_string()),
@@ -434,6 +457,7 @@ mod tests {
             method: Some("POST".to_string()),
             query: None,
             payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            credentials: None,
             date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
             region: None,
             service: None,

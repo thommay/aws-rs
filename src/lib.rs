@@ -1,12 +1,15 @@
 #![crate_name = "aws"]
 #![crate_type = "lib"]
-#![feature(macro_rules)]
 
-extern crate curl;
+// extern crate curl;
 #[cfg(unix)] extern crate openssl;
 extern crate serialize;
 extern crate time;
 extern crate url;
+extern crate ini;
 
-pub mod signers;
+#[macro_use] extern crate log;
+
+pub mod credentials;
 pub mod request;
+pub mod signers;

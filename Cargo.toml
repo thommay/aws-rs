@@ -6,9 +6,11 @@ authors = ["Thom May <thom@may.lt>"]
 
 [dependencies]
 openssl = "*"
-curl = "*"
+#curl = "*"
 time = "*"
-url = "0.2.9"
+url = "*"
+log = "*"
 
-[dev-dependencies]
-log = "0.1"
+[dependencies.rust-ini]
+git = "https://github.com/zonyitoo/rust-ini.git"
+
