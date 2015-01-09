@@ -2,6 +2,7 @@ use time::now_utc;
 use time::Tm;
 use std::ascii::AsciiExt;
 use openssl::crypto::hash::Hasher;
+use openssl::crypto::hmac::HMAC;
 use openssl::crypto::hash::HashType::SHA256;
 use serialize::hex::ToHex;
 use std::collections::BTreeMap;
@@ -82,10 +83,21 @@ impl<'a> SigV4<'a> {
     }
 
     pub fn signature(self) -> String {
-        self.signing_string()
+        hmac(self.derived_signing_key().as_slice(),
+             self.signing_string().as_slice()).to_hex().to_string()
     }
 
-    fn signing_string(self) -> String {
+    #[allow(non_snake_case)]
+    fn derived_signing_key(&self) -> Vec<u8> {
+        let ref kSecret = self.clone().credentials.unwrap().secret.unwrap();
+        let kDate = hmac(format!("AWS4{}", kSecret).as_bytes(),
+                self.date.strftime("%Y%m%d").unwrap().to_string().as_slice());
+        let kRegion = hmac(kDate.as_slice(), expand_string(&self.region).as_slice());
+        let kService = hmac(kRegion.as_slice(), expand_string(&self.service).as_slice());
+        hmac(kService.as_slice(), "aws4_request")
+    }
+
+    fn signing_string(&self) -> String {
         format!("AWS4-HMAC-SHA256\n{}\n{}\n{}",
                 self.date.strftime("%Y%m%dT%H%M%SZ").unwrap(),
                 self.credential_scope(),
@@ -214,6 +226,12 @@ fn append_header(map: &mut BTreeMap<String, Vec<String>>, key: &str, value: &str
     };
 }
 
+fn hmac(key: &[u8], data: &str) -> Vec<u8> {
+    let mut hmac = HMAC(SHA256, key);
+    hmac.update(data.as_bytes());
+    hmac.finalize()
+}
+
 fn expand_string(val: &Option<String>) -> String {
     match *val {
         None => "".to_string(),
@@ -243,6 +261,7 @@ mod tests {
     use credentials::Credentials;
     use time::strptime;
     use std::collections::BTreeMap;
+    use serialize::hex::ToHex;
 
     macro_rules! wrap_header (
         ($key:expr) => (
@@ -472,6 +491,49 @@ x-amz-date:20110909T233600Z
 
 content-type;host;x-amz-date
 b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
+    }
+
+
+    #[test]
+    fn test_signing_key() {
+        let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
+
+        let sig = SigV4 {
+            credentials: Some(cred),
+            headers: BTreeMap::new(),
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("us-east-1".to_string()),
+            service: Some("iam".to_string()),
+        }.date();
+
+        let target = [152, 241, 216, 137, 254, 196, 244, 66, 26, 220, 82, 43, 171, 12, 225, 248, 46, 105, 41, 194, 98, 237, 21, 229, 169, 76, 144, 239, 209, 227, 176, 231];
+        assert_eq!(sig.derived_signing_key().as_slice().to_hex(), target.to_hex())
+    }
+
+    #[test]
+    fn test_signature() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
+
+        let sig = SigV4 {
+            credentials: Some(cred),
+            headers: BTreeMap::new(),
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("us-east-1".to_string()),
+            service: Some("iam".to_string()),
+        }.date().header(h).header(h2);
+
+        assert_eq!(sig.signature().as_slice(), "ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c")
     }
 
 }
