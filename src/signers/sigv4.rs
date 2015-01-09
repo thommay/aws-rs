@@ -56,12 +56,6 @@ impl<'a> SigV4<'a> {
         self
     }
 
-    pub fn date(mut self) -> SigV4<'a> {
-        append_header(&mut self.headers, "X-Amz-Date",
-                      self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
-        self
-    }
-
     pub fn path(mut self, path: String) -> SigV4<'a> {
         self.path = Some(path);
         self
@@ -82,14 +76,44 @@ impl<'a> SigV4<'a> {
         self
     }
 
-    pub fn signature(self) -> String {
+    pub fn as_headers(self) -> Vec<(String, String)> {
+        let fin = self.date().authorization();
+
+        let mut h = Vec::new();
+        for (k, v) in fin.clone().headers.iter() {
+            let val = canonical_value(v);
+            h.push((k.clone(), val))
+        }
+        h
+    }
+
+    fn date(mut self) -> SigV4<'a> {
+        append_header(&mut self.headers, "x-amz-date",
+                      self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
+        self
+    }
+
+    fn authorization(mut self) -> SigV4<'a> {
+        let cs = self.credential_scope();
+        let h = self.signed_headers();
+        let s = self.clone().signature();
+
+        let auth = format!("AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
+               self.clone().credentials.unwrap().key.unwrap(),
+               cs, h, s);
+
+        append_header(&mut self.headers, "authorization", auth.as_slice());
+        self
+    }
+
+    fn signature(self) -> String {
         hmac(self.derived_signing_key().as_slice(),
              self.signing_string().as_slice()).to_hex().to_string()
     }
 
     #[allow(non_snake_case)]
     fn derived_signing_key(&self) -> Vec<u8> {
-        let ref kSecret = self.clone().credentials.unwrap().secret.unwrap();
+        let kSecret = self.clone().credentials.unwrap().secret.unwrap();
         let kDate = hmac(format!("AWS4{}", kSecret).as_bytes(),
                 self.date.strftime("%Y%m%d").unwrap().to_string().as_slice());
         let kRegion = hmac(kDate.as_slice(), expand_string(&self.region).as_slice());
@@ -112,9 +136,7 @@ impl<'a> SigV4<'a> {
     }
 
     fn hashed_canonical_request(&self) -> String {
-        let mut h = Hasher::new(SHA256);
-        h.update(self.canonical_request().as_bytes());
-        h.finalize().as_slice().to_hex().to_string()
+        hexdigest(self.canonical_request())
     }
 
     fn hashed_payload(&self) -> String {
@@ -122,9 +144,7 @@ impl<'a> SigV4<'a> {
             Some(ref x) => x.to_string(),
             None => "".to_string(),
         };
-        let mut h = Hasher::new(SHA256);
-        h.update(val.as_bytes());
-        h.finalize().as_slice().to_hex().to_string()
+        hexdigest(val)
     }
 
     fn signed_headers(&self) -> String {
@@ -230,6 +250,12 @@ fn hmac(key: &[u8], data: &str) -> Vec<u8> {
     let mut hmac = HMAC(SHA256, key);
     hmac.update(data.as_bytes());
     hmac.finalize()
+}
+
+fn hexdigest(val: String) -> String {
+    let mut h = Hasher::new(SHA256);
+    h.update(val.as_bytes());
+    h.finalize().as_slice().to_hex().to_string()
 }
 
 fn expand_string(val: &Option<String>) -> String {
@@ -536,4 +562,49 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
         assert_eq!(sig.signature().as_slice(), "ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c")
     }
 
+    #[test]
+    fn test_auth_header() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
+
+        let sig = SigV4 {
+            credentials: Some(cred),
+            headers: BTreeMap::new(),
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("us-east-1".to_string()),
+            service: Some("iam".to_string()),
+        }.date().header(h).header(h2).authorization();
+
+        assert_eq!(sig.headers.get("authorization"), wrap_header!("AWS4-HMAC-SHA256 Credential=akid/20110909/us-east-1/iam/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c"))
+    }
+
+    #[test]
+    fn test_as_headers() {
+        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
+        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+
+        let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
+
+        let sig = SigV4 {
+            credentials: Some(cred),
+            headers: BTreeMap::new(),
+            path: Some("/".to_string()),
+            method: Some("POST".to_string()),
+            query: None,
+            payload: Some("Action=ListUsers&Version=2010-05-08".to_string()),
+            date: strptime("20110909T233600Z", "%Y%m%dT%H%M%SZ").unwrap(),
+            region: Some("us-east-1".to_string()),
+            service: Some("iam".to_string()),
+        }.header(h).header(h2);
+
+        let headers = sig.as_headers();
+
+        assert_eq!(headers.first().unwrap(), &("authorization".to_string(), "AWS4-HMAC-SHA256 Credential=akid/20110909/us-east-1/iam/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c".to_string()))
+    }
 }
