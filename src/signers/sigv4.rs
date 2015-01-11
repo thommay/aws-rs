@@ -76,14 +76,6 @@ impl<'a> SigV4<'a> {
         self
     }
 
-    pub fn as_headers(self) -> Vec<(String, String)> {
-        let fin = self.date().authorization();
-
-        fin.headers.iter().
-            map( |h| (h.0.clone(), canonical_value(h.1)) ).
-            collect::<Vec<_>>()
-    }
-
     fn date(mut self) -> SigV4<'a> {
         append_header(&mut self.headers, "x-amz-date",
                       self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
@@ -101,6 +93,14 @@ impl<'a> SigV4<'a> {
 
         append_header(&mut self.headers, "authorization", auth.as_slice());
         self
+    }
+
+    pub fn as_headers(self) -> Vec<(String, String)> {
+        let fin = self.date().authorization();
+
+        fin.headers.iter().
+            map( |h| (h.0.clone(), canonical_value(h.1)) ).
+            collect::<Vec<_>>()
     }
 
     fn signature(self) -> String {
