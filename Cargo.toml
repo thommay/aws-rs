@@ -10,6 +10,7 @@ openssl = "*"
 time = "*"
 url = "*"
 log = "*"
+rustc-serialize = "*"
 
 [dependencies.rust-ini]
 git = "https://github.com/zonyitoo/rust-ini.git"
