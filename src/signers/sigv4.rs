@@ -79,12 +79,9 @@ impl<'a> SigV4<'a> {
     pub fn as_headers(self) -> Vec<(String, String)> {
         let fin = self.date().authorization();
 
-        let mut h = Vec::new();
-        for (k, v) in fin.clone().headers.iter() {
-            let val = canonical_value(v);
-            h.push((k.clone(), val))
-        }
-        h
+        fin.headers.iter().
+            map( |h| (h.0.clone(), canonical_value(h.1)) ).
+            collect::<Vec<_>>()
     }
 
     fn date(mut self) -> SigV4<'a> {
