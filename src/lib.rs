@@ -1,7 +1,7 @@
 #![crate_name = "aws"]
 #![crate_type = "lib"]
 
-// extern crate curl;
+extern crate curl;
 #[cfg(unix)] extern crate openssl;
 extern crate "rustc-serialize" as serialize;
 extern crate time;
