@@ -9,13 +9,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use url::percent_encoding::{percent_encode_to, FORM_URLENCODED_ENCODE_SET};
 
-use request::Header;
 use credentials::Credentials;
-
-struct QP<'a> {
-    k: &'a str,
-    v: &'a str,
-}
 
 #[derive(Clone)]
 pub struct SigV4<'a> {
@@ -46,8 +40,8 @@ impl<'a> SigV4<'a> {
         }
     }
 
-    pub fn header(mut self, header: Header) -> SigV4<'a> {
-        append_header(&mut self.headers, header.key.as_slice(), header.value.as_slice());
+    pub fn header(mut self, header: (&str, &str)) -> SigV4<'a> {
+        append_header(&mut self.headers, header.0, header.1);
         self
     }
 
@@ -175,13 +169,13 @@ impl<'a> SigV4<'a> {
         match self.query {
             None => String::new(),
             Some(ref x) => {
-                let mut h: Vec<QP> = Vec::new();
+                let mut h: Vec<(&str, &str)> = Vec::new();
                 for q in x.split('&') {
                     if q.contains_char('=') {
                         let n: Vec<&str> = q.splitn(1, '=').collect();
-                        h.push(QP{k: n[0], v: n[1]})
+                        h.push((n[0], n[1]))
                     } else {
-                        h.push(QP{k: q, v: ""})
+                        h.push((q, ""))
                     }
                 };
                 sort_query_string(h)
@@ -201,7 +195,7 @@ impl<'a> SigV4<'a> {
 
 }
 
-fn sort_query_string(mut query: Vec<QP>) -> String {
+fn sort_query_string(mut query: Vec<(&str, &str)>) -> String {
     #[inline]
     fn byte_serialize(input: &str, output: &mut String) {
         for &byte in input.as_bytes().iter() {
@@ -211,14 +205,14 @@ fn sort_query_string(mut query: Vec<QP>) -> String {
 
     let mut output = String::new();
 
-    query.sort_by( |a, b| a.k.cmp(b.k));
+    query.sort_by( |a, b| a.0.cmp(b.0));
     for item in query.iter() {
         if output.len() > 0 {
             output.push_str("&");
         }
-        byte_serialize(item.k, &mut output);
+        byte_serialize(item.0, &mut output);
         output.push_str("=");
-        byte_serialize(item.v, &mut output);
+        byte_serialize(item.1, &mut output);
     }
 
     output
@@ -280,7 +274,6 @@ fn canonical_value(val: &Vec<String>) -> String {
 #[cfg(test)]
 mod tests {
     use super::SigV4;
-    use request::Header;
     use credentials::Credentials;
     use time::strptime;
     use std::collections::BTreeMap;
@@ -315,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_add_header() {
-        let h = Header{ key: "test".to_string(), value: "a string".to_string()};
+        let h = ("test", "a string");
 
         let sig = SigV4::new().header(h);
         assert_eq!(sig.headers.get("test"), wrap_header!("a string"))
@@ -323,8 +316,8 @@ mod tests {
 
     #[test]
     fn test_add_second_value() {
-        let h = Header{ key: "test".to_string(), value: "a string".to_string()};
-        let h2 = Header{ key: "test".to_string(), value: "another string".to_string()};
+        let h = ("test", "a string");
+        let h2 = ("test", "another string");
 
         let sig = SigV4::new().header(h).header(h2);
         assert_eq!(sig.headers.get("test"), Some(&vec!("a string".to_string(), "another string".to_string())))
@@ -357,8 +350,8 @@ mod tests {
 
     #[test]
     fn test_signing_string() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h2 = ("Host", "iam.amazonaws.com" );
 
         let sig = SigV4 {
             credentials: None,
@@ -380,8 +373,8 @@ mod tests {
 
     #[test]
     fn test_hashed_request() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8" );
+        let h2 = ("Host", "iam.amazonaws.com" );
 
         let sig = SigV4 {
             headers: BTreeMap::new(),
@@ -400,12 +393,9 @@ mod tests {
 
     #[test]
     fn test_signed_headers() {
-        let h = Header{ key: "test".to_string(),
-            value: "a string".to_string()};
-        let h2 = Header{ key: "Content-Type".to_string(),
-            value: "application/x-www-form-urlencoded; charset=utf-8".to_string()};
-        let h3 = Header{ key: "Authorization".to_string(),
-            value: "none".to_string()};
+        let h = ("test", "a string");
+        let h2 = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h3 = ("Authorization", "none");
 
         let sig = SigV4::new().date().header(h).header(h2).header(h3);
         assert_eq!(sig.signed_headers().as_slice(), "content-type;test;x-amz-date")
@@ -428,24 +418,24 @@ mod tests {
 
     #[test]
     fn test_canonical_headers() {
-        let h = Header{ key: "Xyz".to_string(), value: "1".to_string() };
-        let h2 = Header{ key: "Abc".to_string(), value: "2".to_string() };
-        let h3 = Header{ key: "Mno".to_string(), value: "3".to_string() };
-        let h4 = Header{ key: "Authorization".to_string(), value: "4".to_string() };
+        let h = ("Xyz", "1");
+        let h2 = ("Abc", "2");
+        let h3 = ("Mno", "3");
+        let h4 = ("Authorization", "4");
         let sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:2\nmno:3\nxyz:1\n")
     }
 
     #[test]
     fn test_prune_whitespace() {
-        let h = Header{ key: "Abc".to_string(), value: "a  b  c".to_string() };
+        let h = ("Abc", "a  b  c");
         let sig = SigV4::new().header(h);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:a b c\n")
     }
 
     #[test]
     fn test_no_prune_quoted() {
-        let h = Header{ key: "Abc".to_string(), value: "\"a  b  c\"".to_string() };
+        let h = ("Abc", "\"a  b  c\"");
         let sig = SigV4::new().header(h);
         assert_eq!(sig.canonical_headers().as_slice(), "abc:\"a  b  c\"\n")
     }
@@ -490,8 +480,8 @@ mod tests {
 
     #[test]
     fn test_canonical_request() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h2 = ("Host", "iam.amazonaws.com");
 
         let sig = SigV4 {
             headers: BTreeMap::new(),
@@ -539,8 +529,8 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
 
     #[test]
     fn test_signature() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h2 = ("Host", "iam.amazonaws.com");
 
         let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
 
@@ -561,8 +551,8 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
 
     #[test]
     fn test_auth_header() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h2 = ("Host", "iam.amazonaws.com");
 
         let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
 
@@ -583,8 +573,8 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
 
     #[test]
     fn test_as_headers() {
-        let h = Header{ key: "Content-Type".to_string(), value: "application/x-www-form-urlencoded; charset=utf-8".to_string() };
-        let h2 = Header{ key: "Host".to_string(), value: "iam.amazonaws.com".to_string() };
+        let h = ("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        let h2 = ("Host", "iam.amazonaws.com");
 
         let cred = Credentials::new().path("fixtures/credentials.ini").profile("aws").load();
 
