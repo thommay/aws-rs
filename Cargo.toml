@@ -13,5 +13,7 @@ log = "*"
 rustc-serialize = "*"
 
 [dependencies.rust-ini]
-git = "https://github.com/zonyitoo/rust-ini.git"
+# git = "https://github.com/zonyitoo/rust-ini.git"
+git = "https://github.com/thommay/rust-ini.git"
+branch = "20150204_nightly"
 

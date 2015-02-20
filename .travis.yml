@@ -1,2 +1,7 @@
+# env:
+#   global:
+#     - secure: eAM0uZJw9N/5JZ+jkX6LFMJhXSWgdjeDJkvNj/8AK3hTClSRqWPndDu/NOQhRX243dnBGAlcDRnlpEf5U56t+THXho2XE3ZnObSIC4BbPkR2hnkoetRSuonacoI1tIQHOMPCLin6gr5hjNwIHGtg9UCRC/IEEmcNfG+Vz1chw58=
 language: rust
 sudo: false
+# after_script:
+#   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
