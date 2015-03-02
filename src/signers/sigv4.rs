@@ -1,9 +1,9 @@
 use time::now_utc;
 use time::Tm;
 use std::ascii::AsciiExt;
-use openssl::crypto::hash::Hasher;
-use openssl::crypto::hmac::HMAC;
-use openssl::crypto::hash::HashType::SHA256;
+use openssl::crypto::hash::hash;
+use openssl::crypto::hmac::hmac;
+use openssl::crypto::hash::Type::SHA256;
 use serialize::hex::ToHex;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -12,8 +12,8 @@ use url::percent_encoding::{percent_encode_to, FORM_URLENCODED_ENCODE_SET};
 use credentials::Credentials;
 
 #[derive(Clone)]
-pub struct SigV4<'a> {
-    credentials: Option<Credentials<'a>>,
+pub struct SigV4 {
+    credentials: Option<Credentials>,
     date: Tm,
     headers: BTreeMap<String, Vec<String>>,
     method: Option<String>,
@@ -24,8 +24,8 @@ pub struct SigV4<'a> {
     service: Option<String>,
 }
 
-impl<'a> SigV4<'a> {
-    pub fn new() -> SigV4<'a>{
+impl<'a> SigV4 {
+    pub fn new() -> SigV4{
         let dt = now_utc();
         SigV4 {
             credentials: None,
@@ -40,43 +40,43 @@ impl<'a> SigV4<'a> {
         }
     }
 
-    pub fn header(mut self, header: (&str, &str)) -> SigV4<'a> {
+    pub fn header(mut self, header: (&str, &str)) -> SigV4 {
         append_header(&mut self.headers, header.0, header.1);
         self
     }
 
-    pub fn credentials(mut self, credentials: Credentials<'a>) -> SigV4<'a> {
+    pub fn credentials(mut self, credentials: Credentials) -> SigV4 {
         self.credentials = Some(credentials);
         self
     }
 
-    pub fn path(mut self, path: String) -> SigV4<'a> {
+    pub fn path(mut self, path: String) -> SigV4 {
         self.path = Some(path);
         self
     }
 
-    pub fn method(mut self, method: String) -> SigV4<'a> {
+    pub fn method(mut self, method: String) -> SigV4 {
         self.method = Some(method);
         self
     }
 
-    pub fn query(mut self, query: String) -> SigV4<'a> {
+    pub fn query(mut self, query: String) -> SigV4 {
         self.query = Some(query);
         self
     }
 
-    pub fn payload(mut self, payload: String) -> SigV4<'a> {
+    pub fn payload(mut self, payload: String) -> SigV4 {
         self.payload = Some(payload);
         self
     }
 
-    fn date(mut self) -> SigV4<'a> {
+    fn date(mut self) -> SigV4 {
         append_header(&mut self.headers, "x-amz-date",
                       self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
         self
     }
 
-    fn authorization(mut self) -> SigV4<'a> {
+    fn authorization(mut self) -> SigV4 {
         let cs = self.credential_scope();
         let h = self.signed_headers();
         let s = self.clone().signature();
@@ -98,18 +98,18 @@ impl<'a> SigV4<'a> {
     }
 
     fn signature(self) -> String {
-        hmac(self.derived_signing_key().as_slice(),
-             self.signing_string().as_slice()).to_hex().to_string()
+        hmac(SHA256, &self.derived_signing_key(),
+             self.signing_string().as_bytes()).to_hex().to_string()
     }
 
     #[allow(non_snake_case)]
     fn derived_signing_key(&self) -> Vec<u8> {
         let kSecret = self.clone().credentials.unwrap().secret.unwrap();
-        let kDate = hmac(format!("AWS4{}", kSecret).as_bytes(),
-                self.date.strftime("%Y%m%d").unwrap().to_string().as_slice());
-        let kRegion = hmac(kDate.as_slice(), expand_string(&self.region).as_slice());
-        let kService = hmac(kRegion.as_slice(), expand_string(&self.service).as_slice());
-        hmac(kService.as_slice(), "aws4_request")
+        let kDate = hmac(SHA256, format!("AWS4{}", kSecret).as_bytes(),
+                self.date.strftime("%Y%m%d").unwrap().to_string().as_bytes());
+        let kRegion = hmac(SHA256, &kDate, expand_string(&self.region).as_bytes());
+        let kService = hmac(SHA256, &kRegion, expand_string(&self.service).as_bytes());
+        hmac(SHA256, &kService, "aws4_request".as_bytes())
     }
 
     fn signing_string(&self) -> String {
@@ -127,7 +127,7 @@ impl<'a> SigV4<'a> {
     }
 
     fn hashed_canonical_request(&self) -> String {
-        hexdigest(self.canonical_request())
+        to_hexdigest(self.canonical_request())
     }
 
     fn hashed_payload(&self) -> String {
@@ -135,7 +135,7 @@ impl<'a> SigV4<'a> {
             Some(ref x) => x.to_string(),
             None => "".to_string(),
         };
-        hexdigest(val)
+        to_hexdigest(val)
     }
 
     fn signed_headers(&self) -> String {
@@ -171,7 +171,7 @@ impl<'a> SigV4<'a> {
             Some(ref x) => {
                 let mut h: Vec<(&str, &str)> = Vec::new();
                 for q in x.split('&') {
-                    if q.contains_char('=') {
+                    if q.contains('=') {
                         let n: Vec<&str> = q.splitn(1, '=').collect();
                         h.push((n[0], n[1]))
                     } else {
@@ -237,16 +237,9 @@ fn append_header(map: &mut BTreeMap<String, Vec<String>>, key: &str, value: &str
     };
 }
 
-fn hmac(key: &[u8], data: &str) -> Vec<u8> {
-    let mut hmac = HMAC(SHA256, key);
-    hmac.update(data.as_bytes());
-    hmac.finalize()
-}
-
-fn hexdigest(val: String) -> String {
-    let mut h = Hasher::new(SHA256);
-    h.update(val.as_bytes());
-    h.finalize().as_slice().to_hex().to_string()
+fn to_hexdigest(val: String) -> String {
+    let h = hash(SHA256, val.as_bytes());
+    h.as_slice().to_hex().to_string()
 }
 
 fn expand_string(val: &Option<String>) -> String {

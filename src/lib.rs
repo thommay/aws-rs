@@ -1,6 +1,10 @@
 #![crate_name = "aws"]
 #![crate_type = "lib"]
 
+#![feature(collections)]
+#![feature(core)]
+#![feature(path)]
+
 extern crate curl;
 #[cfg(unix)] extern crate openssl;
 extern crate "rustc-serialize" as serialize;

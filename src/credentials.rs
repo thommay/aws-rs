@@ -1,16 +1,17 @@
 use ini::Ini;
-use std::os;
+use std::path::PathBuf;
+use std::env;
 
 #[derive(Clone)]
-pub struct Credentials<'a> {
+pub struct Credentials {
     pub key: Option<String>,
     pub secret: Option<String>,
     path: String,
     profile: String,
 }
 
-impl<'a> Credentials<'a> {
-    pub fn new() -> Credentials<'a> {
+impl<'a> Credentials {
+    pub fn new() -> Credentials {
         Credentials{
             key: None,
             secret: None,
@@ -19,17 +20,17 @@ impl<'a> Credentials<'a> {
         }
     }
 
-    pub fn path(mut self, path: &str) -> Credentials<'a > {
+    pub fn path(mut self, path: &str) -> Credentials {
         self.path = get_absolute_path(path);
         self
     }
 
-    pub fn profile(mut self, profile: &str) -> Credentials<'a> {
+    pub fn profile(mut self, profile: &str) -> Credentials {
         self.profile = String::from_str(profile);
         self
     }
 
-    pub fn load(mut self) -> Credentials<'a> {
+    pub fn load(mut self) -> Credentials {
         let mut conf = Ini::load_from_file(self.path.as_slice()).unwrap();
         conf.begin_section(self.profile.as_slice());
         let key = conf.get("aws_access_key_id").unwrap();
@@ -42,26 +43,28 @@ impl<'a> Credentials<'a> {
 }
 
 fn get_default_profile() -> String {
-    match os::getenv("AWS_PROFILE") {
-        None => "default".to_string(),
-        Some(s) => s.to_string(),
+    match env::var("AWS_PROFILE") {
+        Err(_) => "default".to_string(),
+        Ok(s) => s.to_string(),
     }
 }
 
 fn get_profile_path() -> String {
-    let home = match os::getenv("HOME") {
+    let home = match env::var("HOME") {
         // hell if i know what not having home set means
-        None => "/root".to_string(),
-        Some(s) => s,
+        Err(_) => "/root".to_string(),
+        Ok(s) => s,
     };
-    let p = Path::new(home).join(".aws").join("credentials");
-    p.as_str().unwrap().to_string()
+    let p = PathBuf::new(home.as_slice()).join(".aws").join("credentials");
+    p.to_str().unwrap().to_string()
 }
 
 fn get_absolute_path(val: &str) -> String {
-    let mut p = Path::new(val);
-    p = os::make_absolute(&p).unwrap();
-    p.as_str().unwrap().to_string()
+    let mut p = PathBuf::new(val);
+    if !p.is_absolute() {
+        p = env::current_dir().unwrap().join(val);
+    }
+    p.to_str().unwrap().to_string()
 }
 
 #[cfg(test)]
