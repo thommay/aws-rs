@@ -3,11 +3,11 @@
 
 #![feature(collections)]
 #![feature(core)]
-#![feature(path)]
+#![feature(convert)]
 
 extern crate curl;
 #[cfg(unix)] extern crate openssl;
-extern crate "rustc-serialize" as serialize;
+extern crate rustc_serialize as serialize;
 extern crate time;
 extern crate url;
 extern crate ini;

@@ -31,8 +31,8 @@ impl<'a> Credentials {
     }
 
     pub fn load(mut self) -> Credentials {
-        let mut conf = Ini::load_from_file(self.path.as_slice()).unwrap();
-        conf.begin_section(self.profile.as_slice());
+        let mut conf = Ini::load_from_file(&self.path).unwrap();
+        conf.begin_section(&self.profile);
         let key = conf.get("aws_access_key_id").unwrap();
         let secret = conf.get("aws_secret_access_key").unwrap();
 
@@ -55,14 +55,17 @@ fn get_profile_path() -> String {
         Err(_) => "/root".to_string(),
         Ok(s) => s,
     };
-    let p = PathBuf::new(home.as_slice()).join(".aws").join("credentials");
+    let mut p = PathBuf::from(&home);
+    p.push(".aws");
+    p.push("credentials");
     p.to_str().unwrap().to_string()
 }
 
 fn get_absolute_path(val: &str) -> String {
-    let mut p = PathBuf::new(val);
+    let mut p = PathBuf::from(val);
     if !p.is_absolute() {
-        p = env::current_dir().unwrap().join(val);
+        p = env::current_dir().unwrap();
+        p.push(val);
     }
     p.to_str().unwrap().to_string()
 }
@@ -74,25 +77,25 @@ mod test {
     #[test]
     fn test_defaults() {
         let cred = Credentials::new().path("/my/credentials/file");
-        assert_eq!(cred.path.as_slice(), "/my/credentials/file")
+        assert_eq!(cred.path, "/my/credentials/file")
     }
 
     #[test]
     fn test_profile() {
         let cred = Credentials::new().profile("new");
-        assert_eq!(cred.profile.as_slice(), "new")
+        assert_eq!(cred.profile, "new")
     }
 
     #[test]
     fn test_load_default() {
         // the path is relative from where cargo is running, so the root of the project
         let cred = Credentials::new().path("fixtures/credentials.ini").load();
-        assert_eq!(cred.key.unwrap().as_slice(), "12345")
+        assert_eq!(cred.key.unwrap(), "12345")
     }
 
     #[test]
     fn test_load_specific() {
         let cred = Credentials::new().path("fixtures/credentials.ini").profile("first").load();
-        assert_eq!(cred.key.unwrap().as_slice(), "zxspectrum")
+        assert_eq!(cred.key.unwrap(), "zxspectrum")
     }
 }

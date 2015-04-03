@@ -72,7 +72,7 @@ impl<'a> SigV4 {
 
     fn date(mut self) -> SigV4 {
         append_header(&mut self.headers, "x-amz-date",
-                      self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_slice());
+                      self.date.strftime("%Y%m%dT%H%M%SZ").unwrap().to_string().as_ref());
         self
     }
 
@@ -85,7 +85,7 @@ impl<'a> SigV4 {
                self.clone().credentials.unwrap().key.unwrap(),
                cs, h, s);
 
-        append_header(&mut self.headers, "authorization", auth.as_slice());
+        append_header(&mut self.headers, "authorization", &auth);
         self
     }
 
@@ -148,7 +148,7 @@ impl<'a> SigV4 {
             if key.as_slice() == "authorization" {
                 continue;
             }
-            h.push_str(key.as_slice());
+            h.push_str(&key);
         }
         h
     }
@@ -160,7 +160,7 @@ impl<'a> SigV4 {
             if key.as_slice() == "authorization" {
                 continue;
             }
-            h.push_str(format!("{}:{}\n", key, canonical_value(value)).as_slice());
+            h.push_str(format!("{}:{}\n", key, canonical_value(value)).as_ref());
         }
         h
     }
@@ -172,7 +172,7 @@ impl<'a> SigV4 {
                 let mut h: Vec<(&str, &str)> = Vec::new();
                 for q in x.split('&') {
                     if q.contains('=') {
-                        let n: Vec<&str> = q.splitn(1, '=').collect();
+                        let n: Vec<&str> = q.splitn(2, '=').collect();
                         h.push((n[0], n[1]))
                     } else {
                         h.push((q, ""))
@@ -256,7 +256,7 @@ fn canonical_value(val: &Vec<String>) -> String {
             st.push(',')
         }
         if v.starts_with("\""){
-            st.push_str(v.as_slice());
+            st.push_str(&v);
         } else {
             st.push_str(v.replace("  ", " ").trim());
         }
@@ -296,7 +296,7 @@ mod tests {
         let sig = SigV4::new().credentials(cred);
 
         let c = sig.credentials.unwrap();
-        assert_eq!(c.key.unwrap().as_slice(), "12345")
+        assert_eq!(c.key.unwrap(), "12345")
     }
 
     #[test]
@@ -319,26 +319,26 @@ mod tests {
     #[test]
     fn test_canonical_query_encoded() {
         let sig = SigV4::new().query("a space=woo woo&x-amz-header=foo".to_string());
-        assert_eq!(sig.canonical_query_string().as_slice(), "a%20space=woo%20woo&x-amz-header=foo")
+        assert_eq!(sig.canonical_query_string(), "a%20space=woo%20woo&x-amz-header=foo")
     }
 
     #[test]
     fn test_canonical_query_valueless() {
         let sig = SigV4::new().query("other=&test&x-amz-header=foo".to_string());
-        assert_eq!(sig.canonical_query_string().as_slice(), "other=&test=&x-amz-header=foo")
+        assert_eq!(sig.canonical_query_string(), "other=&test=&x-amz-header=foo")
     }
 
     #[test]
     fn test_canonical_query_sorted() {
         let sig = SigV4::new().query("foo=&bar=&baz=".to_string());
-        assert_eq!(sig.canonical_query_string().as_slice(), "bar=&baz=&foo=")
+        assert_eq!(sig.canonical_query_string(), "bar=&baz=&foo=")
     }
 
     // Ensure that params with the same name stay in the same order after sorting
     #[test]
     fn test_canonical_query_complex() {
         let sig = SigV4::new().query("q.options=abc&q=xyz&q=mno".to_string());
-        assert_eq!(sig.canonical_query_string().as_slice(), "q=xyz&q=mno&q.options=abc")
+        assert_eq!(sig.canonical_query_string(), "q=xyz&q=mno&q.options=abc")
     }
 
     #[test]
@@ -358,7 +358,7 @@ mod tests {
             service: Some("iam".to_string()),
         }.date().header(h).header(h2);
 
-        assert_eq!(sig.signing_string().as_slice(), r"AWS4-HMAC-SHA256
+        assert_eq!(sig.signing_string(), r"AWS4-HMAC-SHA256
 20110909T233600Z
 20110909/us-east-1/iam/aws4_request
 3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
@@ -381,7 +381,7 @@ mod tests {
             service: None,
         }.date().header(h).header(h2);
 
-        assert_eq!(sig.hashed_canonical_request().as_slice(), "3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
+        assert_eq!(sig.hashed_canonical_request(), "3511de7e95d28ecd39e9513b642aee07e54f4941150d8df8bf94b328ef7e55e2")
     }
 
     #[test]
@@ -391,7 +391,7 @@ mod tests {
         let h3 = ("Authorization", "none");
 
         let sig = SigV4::new().date().header(h).header(h2).header(h3);
-        assert_eq!(sig.signed_headers().as_slice(), "content-type;test;x-amz-date")
+        assert_eq!(sig.signed_headers(), "content-type;test;x-amz-date")
     }
 
     #[test]
@@ -416,21 +416,21 @@ mod tests {
         let h3 = ("Mno", "3");
         let h4 = ("Authorization", "4");
         let sig = SigV4::new().header(h).header(h2).header(h3).header(h4);
-        assert_eq!(sig.canonical_headers().as_slice(), "abc:2\nmno:3\nxyz:1\n")
+        assert_eq!(sig.canonical_headers(), "abc:2\nmno:3\nxyz:1\n")
     }
 
     #[test]
     fn test_prune_whitespace() {
         let h = ("Abc", "a  b  c");
         let sig = SigV4::new().header(h);
-        assert_eq!(sig.canonical_headers().as_slice(), "abc:a b c\n")
+        assert_eq!(sig.canonical_headers(), "abc:a b c\n")
     }
 
     #[test]
     fn test_no_prune_quoted() {
         let h = ("Abc", "\"a  b  c\"");
         let sig = SigV4::new().header(h);
-        assert_eq!(sig.canonical_headers().as_slice(), "abc:\"a  b  c\"\n")
+        assert_eq!(sig.canonical_headers(), "abc:\"a  b  c\"\n")
     }
 
     #[test]
@@ -462,13 +462,13 @@ mod tests {
             region: Some("eu-west-1".to_string()),
             service: Some("iam".to_string()),
         };
-        assert_eq!(sig.credential_scope().as_slice(), "20110909/eu-west-1/iam/aws4_request")
+        assert_eq!(sig.credential_scope(), "20110909/eu-west-1/iam/aws4_request")
     }
 
     #[test]
     fn test_empty_canonical_request() {
         let sig = SigV4::new();
-        assert_eq!(sig.canonical_request().as_slice(), "\n\n\n\n\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        assert_eq!(sig.canonical_request(), "\n\n\n\n\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
     }
 
     #[test]
@@ -488,7 +488,7 @@ mod tests {
             service: None,
         }.date().header(h).header(h2);
 
-        assert_eq!(sig.canonical_request().as_slice(), r"POST
+        assert_eq!(sig.canonical_request(), r"POST
 /
 
 content-type:application/x-www-form-urlencoded; charset=utf-8
@@ -517,7 +517,7 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
         }.date();
 
         let target = [152, 241, 216, 137, 254, 196, 244, 66, 26, 220, 82, 43, 171, 12, 225, 248, 46, 105, 41, 194, 98, 237, 21, 229, 169, 76, 144, 239, 209, 227, 176, 231];
-        assert_eq!(sig.derived_signing_key().as_slice().to_hex(), target.to_hex())
+        assert_eq!(sig.derived_signing_key().to_hex(), target.to_hex())
     }
 
     #[test]
@@ -539,7 +539,7 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
             service: Some("iam".to_string()),
         }.date().header(h).header(h2);
 
-        assert_eq!(sig.signature().as_slice(), "ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c")
+        assert_eq!(sig.signature(), "ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c")
     }
 
     #[test]
