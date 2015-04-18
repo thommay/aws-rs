@@ -145,7 +145,7 @@ impl<'a> SigV4 {
             if h.len() > 0 {
                 h.push(';')
             }
-            if key.as_slice() == "authorization" {
+            if key.as_ref() == String::from_str("authorization") {
                 continue;
             }
             h.push_str(&key);
@@ -157,7 +157,7 @@ impl<'a> SigV4 {
         let mut h = String::new();
 
         for (key,value) in self.headers.iter() {
-            if key.as_slice() == "authorization" {
+            if key.as_ref() == String::from_str("authorization") {
                 continue;
             }
             h.push_str(format!("{}:{}\n", key, canonical_value(value)).as_ref());
