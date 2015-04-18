@@ -2,7 +2,6 @@
 #![crate_type = "lib"]
 
 #![feature(collections)]
-#![feature(core)]
 #![feature(convert)]
 
 extern crate curl;
