@@ -5,11 +5,11 @@ authors = ["Thom May <thom@may.lt>"]
 
 [dependencies]
 openssl = "*"
-curl = "*"
 time = "*"
 url = "*"
 log = "*"
 rustc-serialize = "*"
+hyper = "*"
 
 [dependencies.rust-ini]
 git = "https://github.com/zonyitoo/rust-ini.git"

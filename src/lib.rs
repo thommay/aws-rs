@@ -4,7 +4,7 @@
 #![feature(collections)]
 #![feature(convert)]
 
-extern crate curl;
+extern crate hyper;
 #[cfg(unix)] extern crate openssl;
 extern crate rustc_serialize as serialize;
 extern crate time;
