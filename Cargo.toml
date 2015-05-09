@@ -14,3 +14,5 @@ hyper = "*"
 [dependencies.rust-ini]
 git = "https://github.com/zonyitoo/rust-ini.git"
 
+[dev-dependencies]
+env_logger = "*"

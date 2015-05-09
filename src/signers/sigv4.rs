@@ -8,6 +8,8 @@ use serialize::hex::ToHex;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use url::percent_encoding::{percent_encode_to, FORM_URLENCODED_ENCODE_SET};
+use hyper::header::Headers;
+use std::str;
 
 use credentials::Credentials;
 
@@ -15,7 +17,7 @@ use credentials::Credentials;
 pub struct SigV4 {
     credentials: Option<Credentials>,
     date: Tm,
-    headers: BTreeMap<String, Vec<String>>,
+    headers: BTreeMap<String, Vec<Vec<u8>>>,
     method: Option<String>,
     path: Option<String>,
     payload: Option<String>,
@@ -89,12 +91,14 @@ impl<'a> SigV4 {
         self
     }
 
-    pub fn as_headers(self) -> Vec<(String, String)> {
+    pub fn as_headers(self) -> Headers {
         let fin = self.date().authorization();
+        let mut headers = Headers::new();
 
-        fin.headers.iter().
-            map( |h| (h.0.clone(), canonical_value(h.1)) ).
-            collect::<Vec<_>>()
+        for h in fin.headers {
+            headers.set_raw(h.0, h.1);
+        }
+        headers
     }
 
     fn signature(self) -> String {
@@ -145,7 +149,7 @@ impl<'a> SigV4 {
             if h.len() > 0 {
                 h.push(';')
             }
-            if key.as_ref() == String::from_str("authorization") {
+            if skipped_headers(&key) {
                 continue;
             }
             h.push_str(&key);
@@ -157,7 +161,7 @@ impl<'a> SigV4 {
         let mut h = String::new();
 
         for (key,value) in self.headers.iter() {
-            if key.as_ref() == String::from_str("authorization") {
+            if skipped_headers(&key) {
                 continue;
             }
             h.push_str(format!("{}:{}\n", key, canonical_value(value)).as_ref());
@@ -222,17 +226,17 @@ fn sort_query_string(mut query: Vec<(&str, &str)>) -> String {
     // form_urlencoded::serialize_owned(qs.as_slice())
 }
 
-fn append_header(map: &mut BTreeMap<String, Vec<String>>, key: &str, value: &str) {
+fn append_header(map: &mut BTreeMap<String, Vec<Vec<u8>>>, key: &str, value: &str) {
     let k = key.to_ascii_lowercase().to_string();
 
     match map.entry(k) {
         Entry::Vacant(entry) => {
             let mut values = Vec::new();
-            values.push(value.to_string());
+            values.push(value.as_bytes().to_vec());
             entry.insert(values);
         },
         Entry::Occupied(entry) => {
-            entry.into_mut().push(value.to_string());
+            entry.into_mut().push(value.as_bytes().to_vec());
         }
     };
 }
@@ -249,24 +253,30 @@ fn expand_string(val: &Option<String>) -> String {
     }
 }
 
-fn canonical_value(val: &Vec<String>) -> String {
+fn canonical_value(val: &Vec<Vec<u8>>) -> String {
     let mut st = String::new();
-    for v in val.iter() {
+    for v in val {
+        let s = str::from_utf8(v).unwrap();
         if st.len() > 0 {
             st.push(',')
         }
-        if v.starts_with("\""){
-            st.push_str(&v);
+        if s.starts_with("\""){
+            st.push_str(&s);
         } else {
-            st.push_str(v.replace("  ", " ").trim());
+            st.push_str(s.replace("  ", " ").trim());
         }
     }
     st
 }
 
+fn skipped_headers(header: &str) -> bool {
+    ["authorization", "content-length", "user-agent" ].contains(&header)
+}
+
 #[cfg(test)]
 mod tests {
     use super::SigV4;
+    use signers::http_headers::*;
     use credentials::Credentials;
     use time::strptime;
     use std::collections::BTreeMap;
@@ -274,7 +284,7 @@ mod tests {
 
     macro_rules! wrap_header (
         ($key:expr) => (
-            Some(&vec!($key.to_string()))
+            Some(&vec!($key.as_bytes().to_vec()))
         )
     );
 
@@ -313,7 +323,7 @@ mod tests {
         let h2 = ("test", "another string");
 
         let sig = SigV4::new().header(h).header(h2);
-        assert_eq!(sig.headers.get("test"), Some(&vec!("a string".to_string(), "another string".to_string())))
+        assert_eq!(sig.headers.get("test"), Some(&vec!("a string".as_bytes().to_vec(), "another string".as_bytes().to_vec())))
     }
 
     #[test]
@@ -585,6 +595,6 @@ b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
 
         let headers = sig.as_headers();
 
-        assert_eq!(headers.first().unwrap(), &("authorization".to_string(), "AWS4-HMAC-SHA256 Credential=akid/20110909/us-east-1/iam/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c".to_string()))
+        assert_eq!(headers.get::<Authorization>().unwrap().to_string(), "AWS4-HMAC-SHA256 Credential=akid/20110909/us-east-1/iam/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c".to_string())
     }
 }
