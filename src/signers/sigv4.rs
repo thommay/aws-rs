@@ -13,7 +13,7 @@ use std::str;
 
 use credentials::Credentials;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct SigV4 {
     credentials: Option<Credentials>,
     date: Tm,
@@ -52,23 +52,39 @@ impl<'a> SigV4 {
         self
     }
 
-    pub fn path(mut self, path: String) -> SigV4 {
+    pub fn path(mut self, path: &str) -> SigV4 {
+        let path = String::from_str(path);
         self.path = Some(path);
         self
     }
 
-    pub fn method(mut self, method: String) -> SigV4 {
+    pub fn method(mut self, method: &str) -> SigV4 {
+        let method = String::from_str(method);
         self.method = Some(method);
         self
     }
 
-    pub fn query(mut self, query: String) -> SigV4 {
+    pub fn query(mut self, query: &str) -> SigV4 {
+        let query = String::from_str(query);
         self.query = Some(query);
         self
     }
 
-    pub fn payload(mut self, payload: String) -> SigV4 {
+    pub fn payload(mut self, payload: &str) -> SigV4 {
+        let payload = String::from_str(payload);
         self.payload = Some(payload);
+        self
+    }
+
+    pub fn region(mut self, region: &str) -> SigV4 {
+        let region = String::from_str(region);
+        self.region = Some(region);
+        self
+    }
+
+    pub fn service(mut self, service: &str) -> SigV4 {
+        let service = String::from_str(service);
+        self.service = Some(service);
         self
     }
 
@@ -328,26 +344,26 @@ mod tests {
 
     #[test]
     fn test_canonical_query_encoded() {
-        let sig = SigV4::new().query("a space=woo woo&x-amz-header=foo".to_string());
+        let sig = SigV4::new().query("a space=woo woo&x-amz-header=foo");
         assert_eq!(sig.canonical_query_string(), "a%20space=woo%20woo&x-amz-header=foo")
     }
 
     #[test]
     fn test_canonical_query_valueless() {
-        let sig = SigV4::new().query("other=&test&x-amz-header=foo".to_string());
+        let sig = SigV4::new().query("other=&test&x-amz-header=foo");
         assert_eq!(sig.canonical_query_string(), "other=&test=&x-amz-header=foo")
     }
 
     #[test]
     fn test_canonical_query_sorted() {
-        let sig = SigV4::new().query("foo=&bar=&baz=".to_string());
+        let sig = SigV4::new().query("foo=&bar=&baz=");
         assert_eq!(sig.canonical_query_string(), "bar=&baz=&foo=")
     }
 
     // Ensure that params with the same name stay in the same order after sorting
     #[test]
     fn test_canonical_query_complex() {
-        let sig = SigV4::new().query("q.options=abc&q=xyz&q=mno".to_string());
+        let sig = SigV4::new().query("q.options=abc&q=xyz&q=mno");
         assert_eq!(sig.canonical_query_string(), "q=xyz&q=mno&q.options=abc")
     }
 
@@ -407,7 +423,7 @@ mod tests {
     #[test]
     fn test_hashed_payload() {
         let sig = SigV4::new().
-            payload("Action=ListUsers&Version=2010-05-08".to_string());
+            payload("Action=ListUsers&Version=2010-05-08");
         assert_eq!(sig.hashed_payload(),
         "b6359072c78d70ebee1e81adcbab4f01bf2c23245fa365ef83fe8f1f955085e2")
     }

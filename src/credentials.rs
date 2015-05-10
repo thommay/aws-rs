@@ -2,7 +2,7 @@ use ini::Ini;
 use std::path::PathBuf;
 use std::env;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Credentials {
     pub key: Option<String>,
     pub secret: Option<String>,
