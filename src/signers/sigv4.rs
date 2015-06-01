@@ -103,6 +103,7 @@ impl<'a> SigV4 {
                self.clone().credentials.unwrap().key.unwrap(),
                cs, h, s);
 
+        debug!("Authorization header: {:?}", auth);
         append_header(&mut self.headers, "authorization", &auth);
         self
     }
