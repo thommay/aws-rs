@@ -15,7 +15,6 @@ extern crate ini;
 
 #[macro_use]
 extern crate log;
-#[cfg(test)] extern crate env_logger;
 
 pub mod credentials;
 pub mod request;

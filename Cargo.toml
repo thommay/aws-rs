@@ -10,9 +10,8 @@ url = "*"
 log = "*"
 rustc-serialize = "*"
 hyper = "*"
+env_logger = "*"
 
 [dependencies.rust-ini]
 git = "https://github.com/zonyitoo/rust-ini.git"
 
-[dev-dependencies]
-env_logger = "*"
