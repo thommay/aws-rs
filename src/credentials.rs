@@ -31,10 +31,10 @@ impl<'a> Credentials {
     }
 
     pub fn load(mut self) -> Credentials {
-        let mut conf = Ini::load_from_file(&self.path).unwrap();
-        conf.begin_section(&self.profile);
-        let key = conf.get("aws_access_key_id").unwrap();
-        let secret = conf.get("aws_secret_access_key").unwrap();
+        let conf = Ini::load_from_file(&self.path).unwrap();
+        let section = conf.section(Some(&self.profile)).unwrap();
+        let key = section.get("aws_access_key_id").unwrap();
+        let secret = section.get("aws_secret_access_key").unwrap();
 
         self.key = Some(key.to_string());
         self.secret = Some(secret.to_string());
