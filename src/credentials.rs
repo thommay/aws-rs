@@ -26,7 +26,7 @@ impl<'a> Credentials {
     }
 
     pub fn profile(mut self, profile: &str) -> Credentials {
-        self.profile = String::from_str(profile);
+        self.profile = String::from(profile);
         self
     }
 

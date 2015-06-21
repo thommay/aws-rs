@@ -1,7 +1,6 @@
 #![crate_name = "aws"]
 #![crate_type = "lib"]
 
-#![feature(collections)]
 #![feature(convert)]
 
 #[macro_use]

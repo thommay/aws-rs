@@ -53,37 +53,37 @@ impl<'a> SigV4 {
     }
 
     pub fn path(mut self, path: &str) -> SigV4 {
-        let path = String::from_str(path);
+        let path = String::from(path);
         self.path = Some(path);
         self
     }
 
     pub fn method(mut self, method: &str) -> SigV4 {
-        let method = String::from_str(method);
+        let method = String::from(method);
         self.method = Some(method);
         self
     }
 
     pub fn query(mut self, query: &str) -> SigV4 {
-        let query = String::from_str(query);
+        let query = String::from(query);
         self.query = Some(query);
         self
     }
 
     pub fn payload(mut self, payload: &str) -> SigV4 {
-        let payload = String::from_str(payload);
+        let payload = String::from(payload);
         self.payload = Some(payload);
         self
     }
 
     pub fn region(mut self, region: &str) -> SigV4 {
-        let region = String::from_str(region);
+        let region = String::from(region);
         self.region = Some(region);
         self
     }
 
     pub fn service(mut self, service: &str) -> SigV4 {
-        let service = String::from_str(service);
+        let service = String::from(service);
         self.service = Some(service);
         self
     }
