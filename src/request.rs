@@ -7,11 +7,12 @@ use credentials::Credentials;
 #[derive(Debug)]
 pub struct ApiClient {
     signer: SigV4,
+    version: String,
     endpoint: String
 }
 
 impl ApiClient {
-    pub fn new(creds: Credentials, region: &str, service: &str) -> ApiClient{
+    pub fn new(creds: Credentials, version: &str, region: &str, service: &str) -> ApiClient{
         let sig = SigV4::new();
         let sig = sig.credentials(creds);
         let sig = sig.region(region);
@@ -22,6 +23,7 @@ impl ApiClient {
 
         ApiClient {
             signer: sig,
+            version: String::from(version),
             endpoint: format!("https://{}/", host)
         }
     }
@@ -30,12 +32,12 @@ impl ApiClient {
         let sig = self.signer.clone();
         let sig = sig.method("GET");
         let sig = sig.path("/");
-        let query = format!("Action={}&Version=2015-04-15", action);
+        let query = format!("Action={}&Version={}", action, self.version);
         let sig = sig.query(&query);
         let url = format!("{}?{}", self.endpoint, query);
 
         let headers = sig.as_headers();
-        let mut client = Client::new();
+        let client = Client::new();
         let res = client.get(&url).headers(headers).send();
         res
     }
@@ -51,8 +53,9 @@ mod tests {
         let cred = Credentials::new().path("fixtures/credentials.ini").load();
         let region = "eu-west-1";
         let service = "ec2";
+        let version = "2015-04-15";
 
-        let client = ApiClient::new(cred, region, service);
+        let client = ApiClient::new(cred, version, region, service);
         assert_eq!(client.endpoint, "https://ec2.eu-west-1.amazonaws.com/")
     }
 }
